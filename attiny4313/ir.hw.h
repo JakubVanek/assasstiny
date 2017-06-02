@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include <avr/interrupt.h>
+#include <avr/io.h>
 
 #define ISR_NAME TIMER0_COMPA_vect
 
@@ -14,6 +15,8 @@
 
 
 #define TIMER_INIT() do { \
+	uint8_t sreg = SREG;  \
+	cli(); \
 	PRR    &= ~_BV(PRTIM0); \
 	OCR0A   = TIMER_TICKS;  \
 	TCCR0A  = (_BV(COM0A1 & 0x0)) | (_BV(COM0A2 & 0x0)) | /* no OC0A out */ \
@@ -25,6 +28,7 @@
 	TCNT0   = 0;                                          /* reset count */ \
 	TIFR   &= ~(_BV(OCF0B  & 0xF)) | (_BV(TOF0  & 0xF)) | (_BV(OCF0A  & 0xF)); /* clean interrupt flags */ \
 	TIMSK  |=  (_BV(OCIE0B & 0x0)) | (_BV(TOIE0 & 0x0)) | (_BV(OCIE0A & 0xF)); /* enable CTC interrupt  */ \
+	SREG = sreg; \
 } while(0)
 
 // mapping LED->PORT
