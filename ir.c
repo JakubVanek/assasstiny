@@ -3,10 +3,6 @@
 #include "config.h"
 #include "attiny4313/ir.hw.h"
 
-// individual services
-inline void led_isr();
-inline void ir_isr();
-
 // double buffered IR receiver
 volatile ir_buffer_t bufferA;
 volatile ir_buffer_t bufferB;
@@ -24,8 +20,8 @@ volatile led_timer_t led_timers;
 // initialize IR service
 void initIR() {
 	// initialize shared data; other members are zeroed out by default
-    back_buffer              = bufferA;
-    irdata.current_buffer    = bufferB;
+    back_buffer              = &bufferA;
+    irdata.current_buffer    = &bufferB;
     irdata.current_processed = true;
     
     // initialize IR pins
@@ -41,7 +37,7 @@ void initIR() {
 // main ISR
 ISR(ISR_NAME) {
 	bool on = READ_IR();
-	ir_sample_t ticks = irdata.current_ticks;
+	ir_time_t ticks = irdata.current_ticks;
 	
 	if (on) {
 		switch (irdata.current_state) {
@@ -54,11 +50,11 @@ ISR(ISR_NAME) {
 				goto end;
 			case HEADER_OFF:
 				if (IR_HDRLO_MIN <= ticks && ticks <= IR_HDRLO_MAX) {
-					back_buffer.command = NEC_CODE;
+					back_buffer->command = NEC_CODE;
 					irdata.current_state = DATA_ON;
 					goto restart_ticks;
 				} else if (IR_REPLO_MIN <= ticks && ticks <= IR_REPLO_MAX) {
-					back_buffer.command = NEC_REPEAT;
+					back_buffer->command = NEC_REPEAT;
 					irdata.current_state = DATA_ON;
 					goto restart_ticks;
 				} else {
@@ -66,14 +62,14 @@ ISR(ISR_NAME) {
 					goto idle;
 				}
 			case DATA_OFF:
-				if (back_buffer.length == IR_MAXLEN) {
-					back_buffer.length = 0;
+				if (back_buffer->length == IR_MAXLEN) {
+					back_buffer->length = 0;
 				}
-				back_buffer.data <<= 1;
+				back_buffer->data <<= 1;
 				if (IR_DATALO0_MIN <= ticks && ticks <= IR_DATALO0_MAX) {
-					back_buffer.data |= 0x0;
+					back_buffer->data |= 0x0;
 				} else if (IR_DATALO1_MIN <= ticks && ticks <= IR_DATALO1_MAX) {
-					back_buffer.data |= 0x1;
+					back_buffer->data |= 0x1;
 				} else {
 					// reset
 					goto idle;
@@ -118,15 +114,15 @@ ISR(ISR_NAME) {
 	goto end;
 idle:
 	irdata.current_state = IDLE;
-	back_buffer.length = 0;
+	back_buffer->length = 0;
 restart_ticks:
 	irdata.current_ticks = 0;
 end:;
 
 	for (led_t led = 0; led < LED_COUNT; led++) {
 		// set diode according to timeout
-		WRITE_LED(led, led_timers[led] > 0);
+		WRITE_LED(led, led_timers.usecs[led] > 0);
 		// decrease timeout
-		led_timers[led].usecs -= TIMER_PERIOD_US;
+		led_timers.usecs[led] -= TIMER_PERIOD_US;
 	}
 }

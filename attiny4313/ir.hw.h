@@ -19,24 +19,17 @@
 	cli(); \
 	PRR    &= ~_BV(PRTIM0); \
 	OCR0A   = TIMER_TICKS;  \
-	TCCR0A  = (_BV(COM0A1 & 0x0)) | (_BV(COM0A2 & 0x0)) | /* no OC0A out */ \
-	          (_BV(COM0B1 & 0x0)) | (_BV(COM0B2 & 0x0)) | /* no OC0B out */ \
+	TCCR0A  = (_BV(COM0A0 & 0x0)) | (_BV(COM0A1 & 0x0)) | /* no OC0A out */ \
+	          (_BV(COM0B0 & 0x0)) | (_BV(COM0B1 & 0x0)) | /* no OC0B out */ \
 	          (_BV(WGM01  & 0xF)) | (_BV(WGM00  & 0x0));  /* CTC mode    */ \
 	TCCR0B  = (_BV(FOC0A  & 0x0)) | (_BV(FOC0B  & 0x0)) | /* no forced compare */ \
 	          (_BV(WGM02  & 0x0)) |                       /* CTC mode    */ \
 	          TIMER_PRESCALER_MAGIC;                      /* prescaler   */ \
 	TCNT0   = 0;                                          /* reset count */ \
-	TIFR   &= ~(_BV(OCF0B  & 0xF)) | (_BV(TOF0  & 0xF)) | (_BV(OCF0A  & 0xF)); /* clean interrupt flags */ \
+	TIFR   &= ~(_BV(OCF0B  & 0xF)) | (_BV(TOV0  & 0xF)) | (_BV(OCF0A  & 0xF)); /* clean interrupt flags */ \
 	TIMSK  |=  (_BV(OCIE0B & 0x0)) | (_BV(TOIE0 & 0x0)) | (_BV(OCIE0A & 0xF)); /* enable CTC interrupt  */ \
 	SREG = sreg; \
 } while(0)
-
-// mapping LED->PORT
-static const uint8_t led_map[LED_COUNT] = {
-	[LED_RECEIVE]      = LED_RCV_OUT,
-	[LED_TRANSMIT_ACK] = LED_ACK_OUT,
-	[LED_TRANSMIT_NAK] = LED_NAK_OUT,
-};
 
 #define IR_DDR      DDRD
 #define IR_PORT     PORTD
@@ -47,6 +40,13 @@ static const uint8_t led_map[LED_COUNT] = {
 #define LED_ACK_OUT _BV(PORTD3)
 #define LED_NAK_OUT _BV(PORTD2)
 #define IR_IN       _BV(PORTD5)
+
+// mapping LED->PORT
+static const uint8_t led_map[LED_COUNT] = {
+	[LED_RECEIVE]      = LED_RCV_OUT,
+	[LED_TRANSMIT_ACK] = LED_ACK_OUT,
+	[LED_TRANSMIT_NAK] = LED_NAK_OUT,
+};
 
 
 #define INIT_IR() do {\

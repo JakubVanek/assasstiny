@@ -3,7 +3,7 @@
 
 #include "config.h"
 
-typedef enum : uint8_t {
+typedef enum {
 	IDLE,
 	HEADER_ON,
 	HEADER_OFF,
@@ -11,7 +11,7 @@ typedef enum : uint8_t {
 	DATA_OFF
 } ir_state_t;
 
-typedef enum : uint8_t {
+typedef enum {
     NEC_CODE,
     NEC_REPEAT
 } ir_command_t;

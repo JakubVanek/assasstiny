@@ -1,7 +1,7 @@
 #ifndef LEDS_H
 #define LEDS_H
 
-typedef enum : uint8_t {
+typedef enum {
 	LED_RECEIVE,
 	LED_TRANSMIT_ACK,
 	LED_TRANSMIT_NAK,
@@ -19,7 +19,7 @@ inline void led_on(led_t which, int16_t usec) {
 }
 
 inline void led_off(led_t which) {
-	turn_on(which, 0);
+	led_on(which, 0);
 }
 
 #endif
