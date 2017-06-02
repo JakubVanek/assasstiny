@@ -1,7 +1,7 @@
 #include "ir.h"
 #include "leds.h"
 #include "config.h"
-#include <avr/interrupt.h>
+#include "attiny4313/ir.hw.h"
 
 // individual services
 inline void led_isr();
@@ -20,27 +20,6 @@ volatile irdata_t    irdata;
 // shared LED service data
 volatile led_timer_t led_timers; 
 
-// mapping LED->PORT
-const uint8_t led_map[LED_COUNT] = {
-	[LED_RECEIVE]      = LED_RCV_OUT,
-	[LED_TRANSMIT_ACK] = LED_ACK_OUT,
-	[LED_TRANSMIT_NAK] = LED_NAK_OUT,
-};
-
-// initialize periodic interrupt
-void initISR() {
-	PRR    &= ~_BV(PRTIM0);
-	OCR0A   = TIMER_TICKS;
-	TCCR0A  = (_BV(COM0A1 & 0x0)) | (_BV(COM0A2 & 0x0)) | // no OC0A out
-	          (_BV(COM0B1 & 0x0)) | (_BV(COM0B2 & 0x0)) | // no OC0B out
-	          (_BV(WGM01  & 0xF)) | (_BV(WGM00  & 0x0));  // CTC mode
-	TCCR0B  = (_BV(FOC0A  & 0x0)) | (_BV(FOC0B  & 0x0)) | // no forced compare
-	          (_BV(WGM02  & 0x0)) |                       // CTC mode
-	          TIMER_PRESCALER_MAGIC;                      // prescaler
-	TCNT0   = 0;                                          // reset count
-	TIFR   &= ~(_BV(OCF0B  & 0xF)) | (_BV(TOF0  & 0xF)) | (_BV(OCF0A  & 0xF)); // clean interrupt flags
-	TIMSK  |=  (_BV(OCIE0B & 0x0)) | (_BV(TOIE0 & 0x0)) | (_BV(OCIE0A & 0xF)); // enable CTC interrupt
-}
 
 // initialize IR service
 void initIR() {
@@ -48,23 +27,20 @@ void initIR() {
     back_buffer              = bufferA;
     irdata.current_buffer    = bufferB;
     irdata.current_processed = true;
-    // initialize pins
-    IR_DDR  &= _BV(PORTD5);
-    IR_PORT &= _BV(PORTD5);
-}
-
-// initialize LED service
-void initLED() {
-	// initialize pins
-	for (led_t led = 0; led < LED_COUNT; led++) {
-		LED_PORT &= ~led_map[led];
-		LED_DDR  |=  led_map[led];
-	}
+    
+    // initialize IR pins
+    INIT_IR();
+    
+	// initialize LED pins
+	INIT_LED();
+	
+	// initialize periodic interrupt
+	TIMER_INIT();
 }
 
 // main ISR
-ISR(TIMER0_COMPA_vect) {
-	bool on = IR_PIN & IR_IN;
+ISR(ISR_NAME) {
+	bool on = READ_IR();
 	ir_sample_t ticks = irdata.current_ticks;
 	
 	if (on) {
@@ -144,11 +120,7 @@ end:;
 
 	for (led_t led = 0; led < LED_COUNT; led++) {
 		// set diode according to timeout
-		if (led_timers[led] > 0) {
-			LED_PORT |=  led_map[led];
-		} else {
-			LED_PORT &= ~led_map[led];
-		}
+		WRITE_LED(led, led_timers[led] > 0);
 		// decrease timeout
 		led_timers[led].usecs -= TIMER_PERIOD_US;
 	}

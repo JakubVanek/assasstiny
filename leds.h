@@ -22,6 +22,4 @@ inline void led_off(led_t which) {
 	turn_on(which, 0);
 }
 
-void initLED();
-
 #endif
