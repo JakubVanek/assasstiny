@@ -11,9 +11,15 @@ typedef enum : uint8_t {
 	DATA_OFF
 } ir_state_t;
 
+typedef enum : uint8_t {
+    NEC_CODE,
+    NEC_REPEAT
+} ir_command_t;
+
 typedef struct {
     ir_payload_t data;
     ir_size_t    length;
+    ir_command_t command;
 } ir_buffer_t;
 
 typedef struct {

@@ -54,6 +54,11 @@ ISR(ISR_NAME) {
 				goto end;
 			case HEADER_OFF:
 				if (IR_HDRLO_MIN <= ticks && ticks <= IR_HDRLO_MAX) {
+					back_buffer.command = NEC_CODE;
+					irdata.current_state = DATA_ON;
+					goto restart_ticks;
+				} else if (IR_REPLO_MIN <= ticks && ticks <= IR_REPLO_MAX) {
+					back_buffer.command = NEC_REPEAT;
 					irdata.current_state = DATA_ON;
 					goto restart_ticks;
 				} else {
