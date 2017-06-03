@@ -18,7 +18,7 @@ volatile led_timer_t led_timers;
 
 
 // initialize IR service
-void initIR() {
+void ir_init() {
 	// initialize shared data; other members are zeroed out by default
     back_buffer              = &bufferA;
     irdata.current_buffer    = &bufferB;

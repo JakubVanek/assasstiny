@@ -44,6 +44,6 @@ typedef struct {
 
 extern volatile irdata_t irdata;
 
-void initIR();
+void ir_init();
 
 #endif
