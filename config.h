@@ -23,13 +23,7 @@
 
 #define IR_MAXLEN (32)
 
-// Size of IR buffer
-typedef uint32_t ir_payload_t;
 
-// IR time datatype
-typedef int16_t ir_time_t;
-
-// IR buffer size datatype
-typedef uint8_t ir_size_t;
+#define UART_BUF 16
 
 #endif
