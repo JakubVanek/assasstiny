@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <avr/io.h>
 
+#define IR_ADDR 20
+
+#define LED_MS 100
+
 #define TIMER_PERIOD_US 50
 #define IR_IDLE_THRESHOLD (10000/TIMER_PERIOD_US)
 
