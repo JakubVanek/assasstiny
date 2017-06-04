@@ -3,13 +3,6 @@
 #include "config.h"
 #include "attiny4313/ir.hw.h"
 
-// double buffered IR receiver
-volatile ir_buffer_t bufferA;
-volatile ir_buffer_t bufferB;
-
-// current IR backbuffer (offline)
-volatile ir_buffer_t * volatile back_buffer;
-
 // shared IR service data
 volatile irdata_t    irdata;
 
@@ -20,8 +13,6 @@ volatile led_timer_t led_timers;
 // initialize IR service
 void ir_init() {
 	// initialize shared data; other members are zeroed out by default
-    back_buffer              = &bufferA;
-    irdata.current_buffer    = &bufferB;
     irdata.current_processed = true;
     
     // initialize IR pins
@@ -34,77 +25,84 @@ void ir_init() {
 	TIMER_INIT();
 }
 
+#define ir_data  (irdata.buffer.data)
+#define ir_len   (irdata.buffer.length)
+#define ir_cmd   (irdata.buffer.command)
+#define ir_state (irdata.current_state)
+#define ir_time  (irdata.current_ticks)
+#define ir_avail() (irdata.current_processed)
+#define ir_notify() do { irdata.current_processed = false; \
+	                     irdata.notify_main       = true; } while(0)
+
 // main ISR
 ISR(ISR_NAME) {
 	bool on = READ_IR();
 	ir_time_t ticks = irdata.current_ticks;
 	
+	if (!ir_avail())
+		goto idle;
+	
 	if (on) {
-		switch (irdata.current_state) {
+		switch (ir_state) {
 			case IDLE:
-				irdata.current_state = HEADER_ON;
+				ir_state = HEADER_ON;
 				goto restart_ticks;
 			case HEADER_ON:
 			case DATA_ON:
-				irdata.current_ticks++;
+				ir_time++;
 				goto end;
 			case HEADER_OFF:
 				if (IR_HDRLO_MIN <= ticks && ticks <= IR_HDRLO_MAX) {
-					back_buffer->command = NEC_CODE;
-					irdata.current_state = DATA_ON;
+					ir_cmd   = NEC_CODE;
+					ir_state = DATA_ON;
 					goto restart_ticks;
 				} else if (IR_REPLO_MIN <= ticks && ticks <= IR_REPLO_MAX) {
-					back_buffer->command = NEC_REPEAT;
-					irdata.current_state = DATA_ON;
+					ir_cmd   = NEC_REPEAT;
+					ir_state = DATA_ON;
 					goto restart_ticks;
 				} else {
 					// reset
 					goto idle;
 				}
 			case DATA_OFF:
-				if (back_buffer->length == IR_MAXLEN) {
-					back_buffer->length = 0;
+				if (ir_len == IR_MAXLEN) {
+					ir_len = 0;
 				}
-				back_buffer->data <<= 1;
+				ir_data <<= 1;
 				if (IR_DATALO0_MIN <= ticks && ticks <= IR_DATALO0_MAX) {
-					back_buffer->data |= 0x0;
+					ir_data |= 0x0;
 				} else if (IR_DATALO1_MIN <= ticks && ticks <= IR_DATALO1_MAX) {
-					back_buffer->data |= 0x1;
+					ir_data |= 0x1;
 				} else {
 					// reset
 					goto idle;
 				}
-				irdata.current_state = DATA_ON;
+				ir_state = DATA_ON;
 				goto restart_ticks;
 		}
 	} else { // off
-		switch (irdata.current_state) {
+		switch (ir_state) {
 			case IDLE:
 				goto end;
 			case HEADER_ON:
 				if (IR_HDRHI_MIN <= ticks && ticks <= IR_HDRHI_MAX) {
-					irdata.current_state = HEADER_OFF;
+					ir_state = HEADER_OFF;
 					goto restart_ticks;
 				} else {
 					goto idle;
 				}
 			case DATA_OFF:
-				if (ticks >= IR_HDRLO_MAX) {
-					if (irdata.current_processed) {
-						ir_buffer_t volatile *tmp = back_buffer;
-						back_buffer = irdata.current_buffer;
-						irdata.current_buffer = tmp;
-						irdata.notify_main = true;
-					}
+				if (ticks >= IR_DATALO1_MAX) {
+					ir_notify();
 					goto idle;
 				}
 				// no break intended
 			case HEADER_OFF:
-				irdata.current_ticks++;
+				ir_time++;
 				goto end;
 			case DATA_ON:
 				if (IR_HDRHI_MIN <= ticks && ticks <= IR_HDRHI_MAX) {
-					irdata.current_state = HEADER_OFF;
+					ir_state = HEADER_OFF;
 					goto restart_ticks;
 				} else {
 					goto idle;
@@ -113,10 +111,10 @@ ISR(ISR_NAME) {
 	}
 	goto end;
 idle:
-	irdata.current_state = IDLE;
-	back_buffer->length = 0;
+	ir_state = IDLE;
+	ir_len = 0;
 restart_ticks:
-	irdata.current_ticks = 0;
+	ir_time = 0;
 end:;
 
 	for (led_t led = 0; led < LED_COUNT; led++) {

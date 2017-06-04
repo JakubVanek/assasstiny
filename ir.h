@@ -33,13 +33,13 @@ typedef struct {
 
 typedef struct {
 	// buffer pointer
-    ir_buffer_t volatile *current_buffer;
+    ir_buffer_t buffer;
     // state tracker
-    ir_state_t            current_state;
-    ir_time_t             current_ticks;
+    ir_state_t  current_state;
+    ir_time_t   current_ticks;
     // signaling
-    bool                  notify_main;
-    bool                  current_processed;
+    bool        notify_main;
+    bool        current_processed;
 } irdata_t;
 
 extern volatile irdata_t irdata;
