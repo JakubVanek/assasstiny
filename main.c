@@ -23,6 +23,7 @@ void main() {
 	ir_buffer_t localIR;
 	ir_init();
 	uart_init();
+	sei();
 	for(;;) {
 		while(!irdata.notify_main && !uartdata.notify_main) {}
 		if (irdata.notify_main) { // full code received, decode & forward
