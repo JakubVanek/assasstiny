@@ -3,24 +3,25 @@
 
 #include <avr/io.h>
 
+#define BAUD 9600
+#include <util/setbaud.h>
+
 #define RXDONE_ISR_NAME   USART0_RX_vect
 #define TXEMPTY_ISR_NAME  USART0_UDRE_vect
 
-#if     F_CPU == 1000000
-#define UART_U2X (_BV(U2X) & 0xFF)
-#define UART_BR 12
-#elseif F_CPU == 8000000
-#define UART_U2X (_BV(U2X) & 0x00)
-#define UART_BR 51
+
+
+#if USE_2X
+#define UART_U2X (_BV(U2X));
 #else
-#error unknown cpu freq
+#define UART_U2X (0x0);
 #endif
 
-
 #define UART_INIT() do { \
-	UBBR  = UART_BR    ; \
+	UBRRH = UBRRH_VALUE; \
+	UBRRL = UBRRL_VALUE; \
 	UCSRA = UART_U2X   ; \
-	UCSRB = _BV(RXIE)  | \
+	UCSRB = _BV(RXCIE)  | \
 	        _BV(UDRIE) ; \
 	UCSRC = _BV(UCSZ1) | \
 	        _BV(UCSZ0) ; \

@@ -1,6 +1,7 @@
 #include "uart.h"
 #include "attiny4313/uart.hw.h"
 #include "util/delay.h"
+#include <avr/interrupt.h>
 
 
 volatile uart_data_t uartdata;
@@ -16,7 +17,6 @@ volatile uart_data_t uartdata;
 
 
 ISR(RXDONE_ISR_NAME) {
-	uint8_t flags = UCSRA;
 	uint8_t byte  = UDR;
 	if (avail_write(uartdata.in)) {
 		buf_write_advance(uartdata.in, byte);
@@ -41,26 +41,26 @@ void uart_init() {
 
 void uart_write(uint8_t byte) {
 	INT_ENABLE
-	
+
 	while (!avail_write(uartdata.out)) { /* fidget spinner */ }
 	buf_write_advance(uartdata.out, byte);
 	UART_ENABLE_TX();
-	
+
 	INT_RESTORE
 }
 
 uint8_t uart_write_many(uint8_t *data, uint8_t len) {
 	uint8_t i = 0;
 	INT_DISABLE
-	
+
 	while (avail_write(uartdata.out) && len > 0) {
 		buf_write_advance(uartdata.out, data[i]);
-		
+
 		i++;
 		len--;
 	}
 	UART_ENABLE_TX();
-	
+
 	INT_RESTORE
 	return i;
 }
@@ -68,10 +68,10 @@ uint8_t uart_write_many(uint8_t *data, uint8_t len) {
 uint8_t uart_read() {
 	uint8_t byte;
 	INT_ENABLE
-	
+
 	while (!avail_read(uartdata.in)) { /* fidget spinner */ }
 	buf_read_advance(uartdata.in, byte);
-	
+
 	INT_RESTORE
 	return byte;
 }
@@ -81,7 +81,7 @@ uint8_t uart_read_many(uint8_t *data, uint8_t len) {
 	INT_DISABLE
 	while (avail_read(uartdata.in) && len > 0) {
 		buf_read_advance(uartdata.in, data[i]);
-		
+
 		i++;
 		len--;
 	}
@@ -92,9 +92,9 @@ uint8_t uart_read_many(uint8_t *data, uint8_t len) {
 bool uart_available() {
 	uint8_t rly;
 	INT_DISABLE
-	
+
 	rly = avail_read(uartdata.in);
-	
+
 	INT_RESTORE
 	return rly;
 }

@@ -1,5 +1,6 @@
 #ifndef LEDS_H
 #define LEDS_H
+#include <avr/interrupt.h>
 
 typedef enum {
 	LED_RECEIVE,
@@ -14,11 +15,14 @@ typedef struct {
 
 extern volatile led_timer_t led_timers;
 
-inline void led_on(led_t which, int16_t usec) {
+inline static void led_on(led_t which, int16_t usec) {
+	uint8_t sreg = SREG;
+	cli();
 	led_timers.usecs[which] = usec;
+	SREG = sreg;
 }
 
-inline void led_off(led_t which) {
+inline static void led_off(led_t which) {
 	led_on(which, 0);
 }
 

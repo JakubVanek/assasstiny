@@ -2,8 +2,9 @@
 #include "uart.h"
 #include "leds.h"
 #include "config.h"
+#include <avr/interrupt.h>
 
-void main() __attribute__((OS_main));
+int main() __attribute__((OS_main));
 
 inline char    upperToHex (uint8_t byte);
 inline char    lowerToHex (uint8_t byte);
@@ -19,36 +20,39 @@ inline uint8_t ir2uart    (uint8_t ir);
 			                 ('a' <= ch && ch <= 'f') || \
 			                 ('A' <= ch && ch <= 'F'))
 
-void main() {
+int main() {
 	ir_buffer_t localIR;
+	uint8_t real_cmd = 0x0;
 	ir_init();
 	uart_init();
 	sei();
 	for(;;) {
 		while(!irdata.notify_main && !uartdata.notify_main) {}
 		if (irdata.notify_main) { // full code received, decode & forward
-			localIR = irdata.current_buffer;
+			cli();
+			localIR = irdata.buffer;
 			irdata.notify_main = false;
 			irdata.current_processed = true;
 			led_on(LED_RECEIVE, LED_MS);
+			sei();
 
-			if (localIR.length != 32)
-				goto end_ir;
+			if (localIR.command == NEC_CODE) {
+				if (localIR.length != 32)
+					goto end_ir;
 
-			uint8_t addr       = (uint8_t)(localIR >> 24);
-			uint8_t addr_compl = (uint8_t)(localIR >> 16);
-			uint8_t cmd        = (uint8_t)(localIR >>  8);
-			uint8_t cmd_compl  = (uint8_t)(localIR >>  0);
+				uint8_t addr       = (uint8_t)(localIR.data >> 24);
+				uint8_t addr_compl = (uint8_t)(localIR.data >> 16);
+				uint8_t cmd        = (uint8_t)(localIR.data >>  8);
+				uint8_t cmd_compl  = (uint8_t)(localIR.data >>  0);
 
-			if (~addr != addr_compl || ~cmd != cmd_compl)
-				goto end_ir;
+				if (~addr != addr_compl || ~cmd != cmd_compl)
+					goto end_ir;
 
-			if (addr != IR_ADDR)
-				goto end_ir;
+				if (addr != IR_ADDR)
+					goto end_ir;
 
-			uint8_t real_cmd = ir2uart(cmd);
-
-
+				real_cmd = ir2uart(cmd);
+			}
 			uart_write('m');
 			uart_write('c');
 			uart_write(' ');
@@ -57,10 +61,10 @@ void main() {
 			uart_write(upperToHex(real_cmd));
 			uart_write(lowerToHex(real_cmd));
 			uart_write('\r');
-
 		end_ir:;
 		}
 		if (uartdata.notify_main) { // 'x' received, blink LED
+			uartdata.notify_main = false;
 			uint8_t ch;
 			request_char('c');
 			request_char(' ');
@@ -80,6 +84,7 @@ void main() {
 		end:;
 		}
 	}
+	return 0;
 }
 
 char upperToHex(uint8_t byte) {
@@ -91,6 +96,6 @@ char lowerToHex(uint8_t byte) {
 char nibbleToHex(uint8_t nibble) {
 	return (nibble < 10) ? (nibble + '0') : (nibble - 10 + 'a');
 }
-inline uint8_t ir2uart(uint8_t ir) {
+uint8_t ir2uart(uint8_t ir) {
 	return ir; // for now
 }
