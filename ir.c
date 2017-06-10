@@ -1,126 +1,103 @@
 #include "ir.h"
-#include "leds.h"
 #include "config.h"
 #include "attiny4313/ir.hw.h"
+#include "attiny4313/timer.hw.h"
 
 // shared IR service data
-volatile irdata_t    irdata;
-
-// shared LED service data
-volatile led_timer_t led_timers; 
-
+ir_data_t    irdata;
 
 // initialize IR service
 void ir_init() {
-	// initialize shared data; other members are zeroed out by default
-    irdata.current_processed = true;
-    
     // initialize IR pins
     INIT_IR();
-    
-	// initialize LED pins
-	INIT_LED();
-	
+
 	// initialize periodic interrupt
-	TIMER_INIT();
+	T0_INIT();
 }
 
-#define ir_data  (irdata.buffer.data)
-#define ir_len   (irdata.buffer.length)
-#define ir_cmd   (irdata.buffer.command)
-#define ir_state (irdata.current_state)
-#define ir_time  (irdata.current_ticks)
-#define ir_avail() (irdata.current_processed)
-#define ir_notify() do { irdata.current_processed = false; \
-	                     irdata.notify_main       = true; } while(0)
-
 // main ISR
-ISR(ISR_NAME) {
+ISR(T0_TRIG_INT) {
 	bool on = READ_IR();
-	ir_time_t ticks = irdata.current_ticks;
-	
-	if (!ir_avail())
-		goto idle;
-	
-	if (on) {
-		switch (ir_state) {
-			case IDLE:
-				ir_state = HEADER_ON;
-				goto restart_ticks;
-			case HEADER_ON:
-			case DATA_ON:
-				ir_time++;
-				goto end;
-			case HEADER_OFF:
-				if (IR_HDRLO_MIN <= ticks && ticks <= IR_HDRLO_MAX) {
-					ir_cmd   = NEC_CODE;
-					ir_state = DATA_ON;
-					goto restart_ticks;
-				} else if (IR_REPLO_MIN <= ticks && ticks <= IR_REPLO_MAX) {
-					ir_cmd   = NEC_REPEAT;
-					ir_state = DATA_ON;
-					goto restart_ticks;
-				} else {
-					// reset
-					goto idle;
-				}
-			case DATA_OFF:
-				if (ir_len == IR_MAXLEN) {
-					ir_len = 0;
-				}
-				ir_data <<= 1;
-				if (IR_DATALO0_MIN <= ticks && ticks <= IR_DATALO0_MAX) {
-					ir_data |= 0x0;
-				} else if (IR_DATALO1_MIN <= ticks && ticks <= IR_DATALO1_MAX) {
-					ir_data |= 0x1;
-				} else {
-					// reset
-					goto idle;
-				}
-				ir_state = DATA_ON;
-				goto restart_ticks;
-		}
-	} else { // off
-		switch (ir_state) {
-			case IDLE:
-				goto end;
-			case HEADER_ON:
-				if (IR_HDRHI_MIN <= ticks && ticks <= IR_HDRHI_MAX) {
-					ir_state = HEADER_OFF;
-					goto restart_ticks;
-				} else {
-					goto idle;
-				}
-			case DATA_OFF:
-				if (ticks >= IR_DATALO1_MAX) {
-					ir_notify();
-					goto idle;
-				}
-				// no break intended
-			case HEADER_OFF:
-				ir_time++;
-				goto end;
-			case DATA_ON:
-				if (IR_HDRHI_MIN <= ticks && ticks <= IR_HDRHI_MAX) {
-					ir_state = HEADER_OFF;
-					goto restart_ticks;
-				} else {
-					goto idle;
-				}
-		}
-	}
-	goto end;
-idle:
-	ir_state = IDLE;
-	ir_len = 0;
-restart_ticks:
-	ir_time = 0;
-end:;
+	if (irdata.notify == IR_RECEIVED) return;
 
-	for (led_t led = 0; led < LED_COUNT; led++) {
-		// set diode according to timeout
-		WRITE_LED(led, led_timers.usecs[led] > 0);
-		// decrease timeout
-		led_timers.usecs[led] -= TIMER_PERIOD_US;
+	switch(irdata.state) {
+		case ST_IDLE:
+			if (on) {
+				irdata.state = ST_ON_HDR;
+			}
+			break;
+		case ST_ON_HDR:
+			if (on) {
+				if (irdata.ticks != 0xFF) {
+					irdata.ticks++;
+				}
+			} else {
+				if (IR_BOUNDED(irdata.ticks, IR_HDRHI)) {
+					irdata.state = ST_OFF_HDR;
+				} else {
+					irdata.state = ST_IDLE;
+				}
+				irdata.ticks = 0;
+			}
+			break;
+		case ST_ON_DATA:
+			if (on) {
+				if (irdata.ticks != 0xFF) {
+					irdata.ticks++;
+				}
+			} else {
+				if (IR_BOUNDED(irdata.ticks, IR_DATHI)) {
+					irdata.state = ST_OFF_DATA;
+				} else {
+					irdata.state = ST_IDLE;
+				}
+				irdata.ticks = 0;
+			}
+			break;
+		case ST_OFF_HDR:
+			if (!on) {
+				if (irdata.ticks <= IR_HDRIDLE) {
+					irdata.ticks++;
+				} else {
+					irdata.state = ST_IDLE;
+					irdata.ticks = 0;
+				}
+			} else {
+				if (IR_BOUNDED(irdata.ticks, IR_HDRLO_CMD)) {
+					irdata.state = ST_ON_DATA;
+					irdata.which = NEC_COMMAND;
+				} else if (IR_BOUNDED(irdata.ticks, IR_HDRLO_REP)) {
+					irdata.state = ST_ON_DATA;
+					irdata.which = NEC_REPEAT;
+				} else {
+					irdata.state = ST_IDLE;
+				}
+				irdata.ticks = 0;
+			}
+			break;
+		case ST_OFF_DATA:
+			if (!on) {
+				if (irdata.ticks <= IR_DATIDLE) {
+					irdata.ticks++;
+				} else {
+					irdata.state = ST_IDLE;
+					irdata.ticks = 0;
+					irdata.notify = IR_RECEIVED;
+				}
+			} else {
+				if (IR_BOUNDED(irdata.ticks, IR_DATLO_0)) {
+					irdata.state = ST_ON_DATA;
+					irdata.code = (irdata.code << 1) | 0x0;
+				} else if (IR_BOUNDED(irdata.ticks, IR_DATLO_1)) {
+					irdata.state = ST_ON_DATA;
+					irdata.code = (irdata.code << 1) | 0x1;
+				} else {
+					irdata.state = ST_IDLE;
+				}
+				irdata.ticks = 0;
+			}
+			break;
 	}
+
+	irdata.ledticks++;
 }

@@ -2,49 +2,45 @@
 #define UART_HW_H
 
 #include <avr/io.h>
-
-#define BAUD 9600
+#include "config.h"
 #include <util/setbaud.h>
 
-#define RXDONE_ISR_NAME   USART0_RX_vect
-#define TXEMPTY_ISR_NAME  USART0_UDRE_vect
-
-
+#define RECEIVED_INTR USART_RX_vect
+#define SEND_INTR     USART_UDRE_vect
 
 #if USE_2X
-#define UART_U2X (_BV(U2X));
+  #define UART_U2X (_BV(U2X));
 #else
-#define UART_U2X (0x0);
+  #define UART_U2X (0x0);
 #endif
 
 #define UART_INIT() do { \
 	UBRRH = UBRRH_VALUE; \
 	UBRRL = UBRRL_VALUE; \
 	UCSRA = UART_U2X   ; \
-	UCSRB = _BV(RXCIE)  | \
-	        _BV(UDRIE) ; \
+	UCSRB = _BV(TXEN)  | \
+	        _BV(RXEN)  ; \
 	UCSRC = _BV(UCSZ1) | \
 	        _BV(UCSZ0) ; \
 } while(0)
 
-#define UART_ENABLE_TX() do { \
-	UCSRB |=  _BV(TXEN);      \
+#define UART_TXON() do {  \
+	UCSRB |=  _BV(UDRIE); \
 } while(0)
 
-#define UART_DISABLE_TX() do { \
-	UCSRB &= ~_BV(TXEN);       \
+#define UART_TXOFF() do { \
+	UCSRB &= ~_BV(UDRIE); \
 } while(0)
 
-#define UART_ENABLE_RX() do { \
-	UCSRB |=  _BV(RXEN);      \
+#define UART_RXON() do {  \
+	UCSRB |=  _BV(RXCIE); \
 } while(0)
 
-#define UART_DISABLE_RX() do { \
-	UCSRB &= ~_BV(RXEN);       \
+#define UART_RXOFF() do { \
+	UCSRB &= ~_BV(RXCIE); \
 } while(0)
 
-#define INT_DISABLE uint8_t sreg = SREG; cli();
-#define INT_ENABLE  uint8_t sreg = SREG; sei();
-#define INT_RESTORE SREG = sreg;
+#define UART_WRITE(src) do { UDR = (src); } while(0)
+#define UART_READ(dst)  do { (dst) = UDR; } while(0)
 
 #endif
