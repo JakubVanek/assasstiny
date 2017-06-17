@@ -1,7 +1,7 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/io.h>
-#include <avr/pgmspace.h>
+#include <avr/eeprom.h>
 #include <stdbool.h>
 #include "ir.h"
 #include "uart.h"
@@ -165,7 +165,7 @@ int main() {
 }
 
 
-const uint8_t codes[] PROGMEM = {
+const uint8_t codes[] EEMEM = {
 	0xE2, 0x00, // CH+  -> CH+
 	0xA2, 0x01, // CH-  -> CH-
 	0x62, 0x08, // CH   -> POWER
@@ -178,16 +178,24 @@ const uint8_t codes[] PROGMEM = {
 	0x18, 0x40, // 2    -> UP
 	0x4A, 0x41, // 6    -> DOWN
 	0xC2, 0x95, // PLAY -> ECO
-	0x68, 0x28, // 0    -> RETURN
+	0x30, 0x28, // 1    -> RETURN
+	0x68, 0x45, // 0    -> QMENU
+	0x98, 0x0B, // 100+ -> INPUT
+	0xB0, 0x43, // 200+ -> MENU
+	0x00, 0x00  // END
 };
-uint8_t codes_size = sizeof(codes) / sizeof(codes[0]);
 
 bool ir2uart(uint8_t ir, uint8_t *real) {
-	for (const uint8_t *ptr = codes; ptr != codes + codes_size; ptr += 2) {
-		if (pgm_read_byte_near(ptr) == ir) {
-			*real = pgm_read_byte_near(ptr + 1);
+	const uint8_t *ptr = codes;
+	for(;;) {
+		uint8_t key = eeprom_read_byte(ptr);
+		if (key == 0x00 && eeprom_read_byte(ptr + 1) == 0x00) {
+			break;
+		} else if (key == ir) {
+			*real = eeprom_read_byte(ptr + 1);
 			return true;
 		}
+		ptr += 2;
 	}
 	return false;
 }
